@@ -1,6 +1,8 @@
 #This class responsibility is to store an xmlTemplater's state
+DocUtils=require('./docUtils')
 
 module.exports=class TemplaterState
+	constructor:(@moduleManager)->@moduleManager.templaterState=this
 	moveCharacters:(numXmlTag,newTextLength,oldTextLength)->
 		for k in [numXmlTag..@matches.length]
 			@charactersAdded[k]+=newTextLength-oldTextLength
@@ -37,26 +39,34 @@ module.exports=class TemplaterState
 		if @inDashLoop then return 'dash'
 		if @inForLoop then return 'for'
 		if @rawXmlTag then return 'xml'
+		getFromModule=@moduleManager.get('loopType')
+		if getFromModule!=null then return getFromModule
 		return 'simple'
 	isLoopClosingTag:()->
 		@textInsideTag[0]=='/' and ('/'+@loopOpen.tag == @textInsideTag)
+	getLeftValue:()->
+		@innerContent('tagStart')
+			.substr(0,@tagStart.numCharacter+@offset[@tagStart.numXmlTag])
+	getRightValue:()->
+		@innerContent('tagEnd').
+			substr(@tagEnd.numCharacter+1+@offset[@tagEnd.numXmlTag])
 	endTag:()->
 		if @inTag is false then throw new Error("Unopened tag near : '#{@context.substr(@context.length-10,10)}'")
 		@inTag= false
 		@tagEnd=@currentStep
-		if @textInsideTag[0]=='@' and @loopType()=='simple'
-			@rawXmlTag=true
-			@tag=@textInsideTag.substr 1
-		if @textInsideTag[0]=='#' and @loopType()=='simple'
-			@inForLoop= true #begin for loop
-			@loopOpen={'start':@tagStart,'end':@tagEnd,'tag':@textInsideTag.substr(1),'raw':@textInsideTag}
-		if @textInsideTag[0]=='^' and @loopType()=='simple'
-			@inForLoop= true #begin for loop
-			@loopIsInverted= true
-			@loopOpen={'start':@tagStart,'end':@tagEnd,'tag':@textInsideTag.substr(1),'raw':@textInsideTag}
-		if @textInsideTag[0]=='-' and @loopType()=='simple'
-			@inDashLoop= true
-			dashInnerRegex= /^-([^\s]+)\s(.+)$/
-			@loopOpen={'start':@tagStart,'end':@tagEnd,'tag':(@textInsideTag.replace dashInnerRegex, '$2'),'element':(@textInsideTag.replace dashInnerRegex, '$1'),'raw':@textInsideTag}
+		@textInsideTag=@textInsideTag.substr(0,@textInsideTag.length+1-DocUtils.tags.end.length)
+		if @loopType()=='simple'
+			if @textInsideTag[0]=='@'
+				@rawXmlTag=true
+				@tag=@textInsideTag.substr 1
+			if @textInsideTag[0]=='#' or @textInsideTag[0]=='^'
+				@inForLoop= true #begin for loop
+				@loopOpen={'start':@tagStart,'end':@tagEnd,'tag':@textInsideTag.substr(1),'raw':@textInsideTag}
+			if @textInsideTag[0]=='^'
+				@loopIsInverted= true
+			if @textInsideTag[0]=='-' and @loopType()=='simple'
+				@inDashLoop= true
+				dashInnerRegex= /^-([^\s]+)\s(.+)$/
+				@loopOpen={'start':@tagStart,'end':@tagEnd,'tag':(@textInsideTag.replace dashInnerRegex, '$2'),'element':(@textInsideTag.replace dashInnerRegex, '$1'),'raw':@textInsideTag}
 		if @textInsideTag[0]=='/'
 			@loopClose={'start':@tagStart,'end':@tagEnd,'raw':@textInsideTag}
