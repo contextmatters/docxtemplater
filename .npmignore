@@ -2,7 +2,6 @@
 *.sublime-workspace
 npm-debug.log
 .hg
-node_modules
 ~$doc.docx
 avantProjet.docx
 avantProjet.html
