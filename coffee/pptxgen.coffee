@@ -43,6 +43,9 @@ PptxGen = class PptxGen extends DocxGen
 	allSlides:->
 		@all_slides ||= @getAllSlides()
 
+	chunkStrategy:->
+		@chunk_strategy ||= DocUtils.config["pptx.chunkStrategy"] || "auto"
+
 	chunkSize:->
 		@chunk_size ||= DocUtils.config["pptx.splitRows"] || 5
 
@@ -66,8 +69,12 @@ PptxGen = class PptxGen extends DocxGen
 		for file_name, index in @getSlideTemplates()
 			original_content = @zip.file(file_name).asText()
 			rows = DocUtils.preg_match_all("\/a:tr",original_content)
-			additional_table_slides = Math.floor(rows.length/@chunkSize())
-			chunks = @splitTableIntoChunks(original_content, additional_table_slides, @chunkSize())
+			if @chunkStrategy() == "split_by"
+				chunks = @splitTableIntoChunksManual(original_content)
+				additional_table_slides = chunks.length
+			else
+				additional_table_slides = Math.floor(rows.length/@chunkSize())
+				chunks = @splitTableIntoChunks(original_content, additional_table_slides, @chunkSize())
 			for i in [0..additional_table_slides-1] by 1
 				@all_slides.push {chunk: chunks[i], original_file_name: file_name, original_index: index+1, additional_table_slides: additional_table_slides, new_index: i+1, first: (i==0)}
 		return @all_slides
@@ -152,6 +159,26 @@ PptxGen = class PptxGen extends DocxGen
 
 	spliceInto:(start, text, str)->
 		return text.substring(0, start) + str + text.substring(start, text.length)
+
+	splitTableIntoChunksManual: (content)->
+		matches = content.match(/slide\_start(.*?)slide\_end/gi)
+		return [content] if matches == null
+		
+		mid_start = content.indexOf("<a:tr h=")
+		mid_end = content.indexOf("</a:tbl>")
+
+		top = content.substring(0, mid_start)
+		bottom = content.substring(mid_end, content.length)
+		chunks = []
+		chunk_start = 0
+
+		for chunk_index in [0..matches.length-1] by 1
+			middle = matches[chunk_index]
+			rows = middle.match(/\<a\:tr h\=\"\d{6}\"\>(.*?)\<\/a\:tr\>/g)
+			middle_rows = rows.join("")
+			chunks[chunk_index] = top+middle_rows+bottom
+
+		return chunks
 
 	splitTableIntoChunks: (content, chunk_count, chunk_size)->
 		mid_start = content.indexOf("<a:tr h=")
